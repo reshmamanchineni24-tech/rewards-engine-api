@@ -1,142 +1,276 @@
-# retailer-rewards-api
 
-Spring Boot REST API that calculates reward points per customer, per month and in total, from a record of purchases.
+# Rewards Engine REST API
 
-## Reward rules
+A Spring Boot application that calculates customer reward points based on purchase transactions. The API provides monthly reward summaries, total points earned, and transaction history for individual customers.
 
-For each transaction:
+## Technologies
 
-- 2 points for every dollar spent **over $100**
-- 1 point for every dollar spent **between $50 and $100**
-- nothing for the first $50
+- Java 17+
+- Spring Boot
+- Spring Data JPA
+- Maven
+- H2 In-Memory Database
+- Swagger UI / OpenAPI
+- JUnit 5 and Mockito
 
-Points are earned per whole dollar, so the amount is truncated first ($120.97 is treated as $120).
+## Reward Points Calculation
 
-| Purchase | Calculation | Points |
-|----------|-------------|--------|
-| $120 | 2 x $20 + 1 x $50 | 90 |
-| $140 | 2 x $40 + 1 x $50 | 130 |
-| $75 | 1 x $25 | 25 |
-| $50 | | 0 |
+Customers earn points based on the amount spent in each transaction:
 
-## Running it
+- 1 point for every whole dollar spent above $50, up to $100.
+- 2 points for every whole dollar spent above $100.
+- No points for purchases of $50 or less.
 
-Requires JDK 17+.
+Only whole-dollar amounts are considered when calculating points.
 
-```bash
-./mvnw spring-boot:run     # Windows: .\mvnw.cmd spring-boot:run
-./mvnw test
+| Purchase Amount | Reward Points |
+|-----------------|---------------|
+| $50 | 0 |
+| $75 | 25 |
+| $100 | 50 |
+| $120 | 90 |
+| $140 | 130 |
+
+For example, a purchase of $120 earns 50 points for the amount between $50 and $100, plus 40 points for the additional $20.
+
+## Running the Application
+
+### Prerequisites
+
+- JDK 17 or higher
+- Maven Wrapper (included in the project)
+
+### Start the application
+
+Windows PowerShell:
+
+```powershell
+.\mvnw.cmd spring-boot:run
 ```
 
-The app starts on http://localhost:8080 with an in-memory H2 database seeded from `src/main/resources/data.sql`.
-
-| What | URL |
-|------|-----|
-| Swagger UI | http://localhost:8080/swagger-ui.html |
-| OpenAPI JSON | http://localhost:8080/v3/api-docs |
-| H2 console | http://localhost:8080/h2-console (`jdbc:h2:mem:rewardsdb`, user `sa`, empty password) |
-
-The sample data (6 customers, 47 purchases) is dated **2026-07-08 to 2026-10-03**, so the window
-`startDate=2026-07-06&endDate=2026-10-06` covers all of it. The default window (no parameters) is the three months
-ending today, so it only matches the sample data while today is within about three months of those dates.
-
-## Using Swagger UI
-
-1. Open http://localhost:8080/swagger-ui.html.
-2. Expand **Rewards** > `GET /rewards/{customerId}` and click **Try it out**.
-3. Enter `customerId` = `1001`.
-4. Click **Execute**.
-
-`startDate` and `endDate` are optional. Swagger pre-fills them with `2026-07-06` and `2026-10-06`, the window that
-covers all of the sample data, so you get results straight away. Clear both fields to use the default window instead.
-
-## API
-
-### `GET /rewards`
-
-Rewards for every customer with purchases in the window, ordered by customer id.
-
-### `GET /rewards/{customerId}`
-
-Rewards for one customer.
-
-| Query parameter | Format | Default | Meaning |
-|-----------------|--------|---------|---------|
-| `startDate` | `yyyy-MM-dd` | three months before `endDate` | first day of the window, inclusive |
-| `endDate` | `yyyy-MM-dd` | today | last day of the window, inclusive |
-
-- A customer with no purchases at all returns `404`; a known customer with none in the window returns `0` points.
-- Months are sorted ascending and listed when the customer had a purchase that month, even if it earned 0 points.
-
-**Examples**
+macOS / Linux:
 
 ```bash
-# explicit window: the last three months of sample data
-curl "http://localhost:8080/rewards/1001?startDate=2026-07-06&endDate=2026-10-06"
-
-# all customers in the same window
-curl "http://localhost:8080/rewards?startDate=2026-07-06&endDate=2026-10-06"
-
-# only startDate: from that day until today
-curl "http://localhost:8080/rewards?startDate=2026-08-01"
-
-# only endDate: the three months before that day
-curl "http://localhost:8080/rewards?endDate=2026-10-06"
-
-# no dates: the three months ending today
-curl "http://localhost:8080/rewards/1001"
+./mvnw spring-boot:run
 ```
 
-**Response** (`200 OK`)
+The application runs on:
+
+http://localhost:8080
+
+If port 8080 is already in use, start it on port 8081:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081"
+```
+
+Use the selected port in the URLs below.
+
+## API Documentation
+
+Swagger UI:
+
+http://localhost:8080/swagger-ui/index.html
+
+OpenAPI specification:
+
+http://localhost:8080/v3/api-docs
+
+Swagger UI allows users to execute API requests and inspect the responses.
+
+## Database Configuration
+
+The application uses an H2 in-memory database.
+
+H2 Console:
+
+http://localhost:8080/h2-console
+
+Database connection:
+
+- JDBC URL: `jdbc:h2:mem:rewardsdb`
+- Username: `sa`
+- Password: Leave blank
+
+Database tables are initialized through `schema.sql`, and sample transactions are loaded from `data.sql`.
+
+## Sample Transaction Data
+
+The database contains:
+
+- 6 customers
+- 47 purchase transactions
+- Transactions dated July 8, 2026, through October 3, 2026
+
+Each transaction includes:
+
+- Transaction ID
+- Customer ID
+- Customer Name
+- Transaction Amount
+- Transaction Date
+
+Sample customer:
+
+| Customer ID | Customer Name |
+|-------------|---------------|
+| 1001 | Aarav Sharma |
+
+## REST API Endpoints
+
+### 1. Get Rewards for All Customers
+
+```http
+GET /rewards
+```
+
+Returns reward summaries for customers with transactions in the selected date range.
+
+Example:
+
+```text
+http://localhost:8080/rewards?startDate=2026-07-06&endDate=2026-10-06
+```
+
+### 2. Get Rewards for a Customer
+
+```http
+GET /rewards/{customerId}
+```
+
+Returns the monthly reward points and total reward points earned by a specific customer.
+
+Example:
+
+```text
+http://localhost:8080/rewards/1001?startDate=2026-07-06&endDate=2026-10-06
+```
+
+Sample response:
 
 ```json
 {
   "customerId": 1001,
   "totalPoints": 964,
   "monthlyRewards": [
-    { "month": "2026-07", "points": 370 },
-    { "month": "2026-08", "points": 210 },
-    { "month": "2026-09", "points": 224 },
-    { "month": "2026-10", "points": 160 }
+    {
+      "month": "2026-07",
+      "points": 370
+    },
+    {
+      "month": "2026-08",
+      "points": 210
+    },
+    {
+      "month": "2026-09",
+      "points": 224
+    },
+    {
+      "month": "2026-10",
+      "points": 160
+    }
   ]
 }
 ```
 
-### `GET /transactions/{customerId}`
+### 3. Get Customer Transactions
 
-All transactions for a customer, newest first.
+```http
+GET /transactions/{customerId}
+```
+
+Returns all recorded transactions for a customer, ordered by transaction date with the newest transactions first.
+
+Example:
+
+```text
+http://localhost:8080/transactions/1001
+```
+
+Sample response:
 
 ```json
 [
-  { "id": 9, "customerId": 1001, "transactionAmount": 155.00, "transactionDate": "2026-10-02" },
-  { "id": 8, "customerId": 1001, "transactionAmount": 142.53, "transactionDate": "2026-09-21" }
+  {
+    "id": 9,
+    "customerId": 1001,
+    "customerName": "Aarav Sharma",
+    "transactionAmount": 155.00,
+    "transactionDate": "2026-10-02"
+  },
+  {
+    "id": 8,
+    "customerId": 1001,
+    "customerName": "Aarav Sharma",
+    "transactionAmount": 142.53,
+    "transactionDate": "2026-09-21"
+  }
 ]
 ```
 
-### Errors
+## Date Range Filtering
 
-Errors use RFC 7807 problem details.
+The rewards endpoints support optional query parameters:
 
-```json
-{
-  "type": "about:blank",
-  "title": "Bad Request",
-  "status": 400,
-  "detail": "Start date 2026-10-01 must not be after end date 2026-09-01",
-  "instance": "/rewards"
-}
+| Parameter | Description |
+|-----------|-------------|
+| `startDate` | Beginning of the date range, inclusive |
+| `endDate` | End of the date range, inclusive |
+
+Dates use the format `yyyy-MM-dd`.
+
+If no dates are provided, the API uses a three-month window ending on the current date.
+
+For testing the complete sample dataset, use:
+
+```text
+startDate=2026-07-06&endDate=2026-10-06
 ```
 
-| Status | When |
-|--------|------|
-| 400 | non-numeric or non-positive customer id, malformed date, `startDate` after `endDate` |
-| 404 | customer has no transactions |
-| 405 | anything other than GET |
-| 500 | anything unexpected (details are logged, not returned) |
+## Error Handling
 
-## Design notes
+The API provides HTTP error responses for invalid requests.
 
-- Amounts are `BigDecimal` / `DECIMAL(12,2)`, never floating point. Points and totals are `long`.
-- The point rules live in `RewardPointsCalculator`, a pure function with its own parameterised tests.
-- The date window is filtered in the database (indexed), not in memory, and "today" comes from an injected `Clock` so tests are deterministic.
-- Schema is owned by `schema.sql`; Hibernate DDL is off.
+| HTTP Status | Description |
+|-------------|-------------|
+| 200 | Request processed successfully |
+| 400 | Invalid customer ID or date parameters |
+| 404 | Customer transactions not found |
+| 405 | HTTP method not supported |
+| 500 | Unexpected server error |
+
+Error responses use the Problem Details format.
+
+## Testing
+
+The project includes unit and integration tests for its API controllers, services, repository, and reward calculation logic.
+
+Run the tests:
+
+Windows:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+macOS / Linux:
+
+```bash
+./mvnw clean test
+```
+
+The project has been validated with 53 passing tests.
+
+## Implementation Details
+
+- Reward points are calculated from individual purchase amounts.
+- Monetary values use `BigDecimal` to maintain precision.
+- Customer transactions are retrieved using Spring Data JPA.
+- Reward calculations are separated from database access.
+- The database uses SQL initialization scripts.
+- The application provides interactive API documentation through Swagger UI.
+- Customer names are included in transaction API responses.
+
+## Repository
+
+GitHub: https://github.com/reshmamanchineni24-tech/rewards-engine-api
